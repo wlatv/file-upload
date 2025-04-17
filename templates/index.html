@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python Script Manager</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .project {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .project-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .upload-btn {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .install-btn {
+            background-color: #2196F3;
+            color: white;
+        }
+        .start-btn {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .stop-btn {
+            background-color: #f44336;
+            color: white;
+        }
+        .delete-btn {
+            background-color: #ff9800;
+            color: white;
+        }
+        .logs-btn {
+            background-color: #9C27B0;
+            color: white;
+        }
+        #fileInput {
+            display: none;
+        }
+        #liveLogs {
+            background-color: #333;
+            color: #fff;
+            padding: 10px;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Python Script Manager</h1>
+            <div>
+                <input type="file" id="fileInput" accept=".zip,.py">
+                <button class="upload-btn" onclick="document.getElementById('fileInput').click()">Upload File</button>
+            </div>
+        </div>
+
+        <div id="projectsContainer">
+            {% for project in projects %}
+            <div class="project" id="project-{{ project.id }}">
+                <h3>Project {{ project.id }}</h3>
+                <p>Main file: {{ project.main_file }}</p>
+                <p>Status: {{ project.status }}</p>
+                <p>Created: {{ project.date }}</p>
+                <div class="project-actions">
+                    <button class="install-btn" onclick="location.href='/install/{{ project.id }}'">Install Packages</button>
+                    <button class="start-btn" onclick="startProject('{{ project.id }}')">Start</button>
+                    <button class="stop-btn" onclick="stopProject('{{ project.id }}')">Stop</button>
+                    <button class="logs-btn" onclick="showLogs('{{ project.id }}')">Show Logs</button>
+                    <button class="delete-btn" onclick="deleteProject('{{ project.id }}')">Delete</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div id="logModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 1000;">
+            <div style="background-color: white; margin: 50px auto; padding: 20px; width: 80%; max-height: 80%; overflow-y: auto;">
+                <h2 id="logTitle">Project Logs</h2>
+                <div id="liveLogs"></div>
+                <button onclick="document.getElementById('logModal').style.display='none'">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Fayl yuklash
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                uploadFile(file);
+            }
+        });
+
+        function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('File uploaded successfully! Project ID: ' + data.project_id);
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            });
+        }
+
+        function startProject(projectId) {
+            fetch(`/start/${projectId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert('Project started successfully');
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                });
+        }
+
+        function stopProject(projectId) {
+            fetch(`/stop/${projectId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert('Project stopped successfully');
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                });
+        }
+
+        function deleteProject(projectId) {
+            if (confirm('Are you sure you want to delete this project?')) {
+                fetch(`/delete/${projectId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            alert('Project deleted successfully');
+                            location.reload();
+                        } else {
+                            alert('Error: ' + data.message);
+                        }
+                    });
+            }
+        }
+
+        function showLogs(projectId) {
+            const modal = document.getElementById('logModal');
+            const logTitle = document.getElementById('logTitle');
+            const liveLogs = document.getElementById('liveLogs');
+            
+            logTitle.textContent = `Logs for Project ${projectId}`;
+            liveLogs.innerHTML = 'Loading logs...';
+            modal.style.display = 'block';
+            
+            // Project logs
+            fetch(`/project_logs/${projectId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        liveLogs.innerHTML = data.logs.join('<br>');
+                    } else {
+                        liveLogs.innerHTML = data.message;
+                    }
+                });
+            
+            // Installation logs
+            fetch(`/logs/${projectId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        const installationLogs = document.createElement('div');
+                        installationLogs.innerHTML = '<h3>Installation Logs</h3>' + data.logs.join('<br>');
+                        liveLogs.appendChild(installationLogs);
+                    }
+                });
+        }
+    </script>
+</body>
+</html>
